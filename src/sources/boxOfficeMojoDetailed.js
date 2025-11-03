@@ -152,8 +152,6 @@ async function fetchMovieDetails(movie, headers) {
   }
   
   extractBudget($, detailedInfo);
-  
-  // Извлечение длительности фильма
   extractRuntime($, detailedInfo);
   
   return detailedInfo;
@@ -243,7 +241,7 @@ function extractBudget($, detailedInfo) {
 }
 
 function extractRuntime($, detailedInfo) {
-  // Способ 1: Поиск по структуре <div class="a-section a-spacing-none"><span>Running Time</span><span>2 hr 42 min</span></div>
+ 
   const runtimeDiv = $('div.a-section.a-spacing-none').filter((i, el) => {
     return $(el).find('span').first().text().trim() === 'Running Time';
   });
@@ -256,7 +254,7 @@ function extractRuntime($, detailedInfo) {
     }
   }
   
-  // Способ 2: Поиск по тексту "Running Time" и взятие следующего элемента
+
   const runtimeLabel = $('span:contains("Running Time")');
   if (runtimeLabel.length > 0) {
     const runtimeValue = runtimeLabel.next('span');
@@ -264,22 +262,21 @@ function extractRuntime($, detailedInfo) {
       detailedInfo.runtime = runtimeValue.text().trim();
       return;
     }
-    
-    // Если следующий span не найден, ищем в родительском элементе
+  
     const parent = runtimeLabel.parent();
     const allSpans = parent.find('span');
     if (allSpans.length >= 2) {
       allSpans.each((i, span) => {
         if ($(span).text().trim() === 'Running Time' && i < allSpans.length - 1) {
           detailedInfo.runtime = $(allSpans[i + 1]).text().trim();
-          return false; // прерываем цикл
+          return false; 
         }
       });
       if (detailedInfo.runtime) return;
     }
   }
   
-  // Способ 3: Поиск в таблицах
+
   $('td').each((index, cell) => {
     const $cell = $(cell);
     const text = $cell.text().trim();
@@ -288,12 +285,12 @@ function extractRuntime($, detailedInfo) {
       const nextCell = $cell.next('td');
       if (nextCell.length > 0) {
         detailedInfo.runtime = nextCell.text().trim();
-        return false; // прерываем цикл
+        return false; 
       }
     }
   });
   
-  // Если ничего не найдено, устанавливаем значение по умолчанию
+  
   if (!detailedInfo.runtime) {
     detailedInfo.runtime = 'N/A';
   }

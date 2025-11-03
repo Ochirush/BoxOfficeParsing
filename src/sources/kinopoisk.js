@@ -7,35 +7,32 @@ const YAMLLoader = require('../utils/yamlLoader');
 const BASE_URL = 'https://www.kinopoisk.ru';
 
 async function fetchKinopoisk() {
-  console.log('🚀 Сбор данных с Кинопоиска...');
+  console.log('Сбор данных с Кинопоиска...');
   
   try {
     const config = YAMLLoader.loadConfig('./src/config/requests.yaml');
     const kpConfig = config.sources.kinopoisk;
     
-    // Пробуем разные подходы
     let result = await tryAllApproaches(kpConfig);
     
-    // Если все подходы не сработали, создаем заглушку
     if (!result || result.movies.length === 0) {
-      console.log('⚠️ Все подходы не сработали, создаем данные для отчета...');
-      result = createStubData();
+      console.log('Все подходы не сработали');
+      result = createEmptyData();
     }
     
     await saveData(result, 'kinopoisk_data');
-    console.log('✅ Данные Кинопоиска сохранены!');
+    console.log('Данные Кинопоиска сохранены!');
     
     return result;
     
   } catch (error) {
-    console.error('❌ Ошибка при сборе данных Кинопоиска:', error.message);
-    return createStubData();
+    console.error('Ошибка при сборе данных Кинопоиска:', error.message);
+    return createEmptyData();
   }
 }
 
-// Основная функция с разными подходами
 async function tryAllApproaches(kpConfig) {
-  console.log('🎯 Пробуем разные методы обхода блокировки...');
+  console.log('Пробуем разные методы обхода блокировки...');
   
   const approaches = [
     { name: 'Стандартный запрос', method: tryStandardRequest },
@@ -45,27 +42,25 @@ async function tryAllApproaches(kpConfig) {
   ];
   
   for (let approach of approaches) {
-    console.log(`\n🔧 Подход: ${approach.name}...`);
+    console.log(`Подход: ${approach.name}...`);
     
     try {
       const result = await approach.method(kpConfig);
       
       if (result && result.movies && result.movies.length > 0) {
-        console.log(`✅ ${approach.name} сработал! Найдено: ${result.movies.length} фильмов`);
+        console.log(`${approach.name} сработал! Найдено: ${result.movies.length} фильмов`);
         return result;
       }
     } catch (error) {
-      console.log(`❌ ${approach.name} не сработал: ${error.message}`);
+      console.log(`${approach.name} не сработал: ${error.message}`);
     }
     
-    // Задержка между попытками
     await delay(3000);
   }
   
   return null;
 }
 
-// 1. Стандартный запрос
 async function tryStandardRequest(kpConfig) {
   const headers = createRealisticHeaders();
   
@@ -83,7 +78,6 @@ async function tryStandardRequest(kpConfig) {
   };
 }
 
-// 2. Улучшенные headers (как в вашем примере)
 async function tryEnhancedHeaders(kpConfig) {
   const headers = {
     'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
@@ -114,7 +108,6 @@ async function tryEnhancedHeaders(kpConfig) {
   };
 }
 
-// 3. Мобильная версия
 async function tryMobileVersion(kpConfig) {
   const headers = {
     'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15E148 Safari/604.1',
@@ -138,18 +131,15 @@ async function tryMobileVersion(kpConfig) {
   };
 }
 
-// 4. Случайные задержки (имитация человеческого поведения)
 async function tryRandomDelays(kpConfig) {
-  console.log('⏳ Имитируем человеческое поведение...');
+  console.log('Имитируем человеческое поведение...');
   
   const headers = createRealisticHeaders();
   
-  // Случайная задержка перед первым запросом
   await delay(2000 + Math.random() * 3000);
   
   const response = await makeRequest(kpConfig.chartUrl, headers);
   
-  // Случайная задержка перед парсингом
   await delay(1000 + Math.random() * 2000);
   
   const movies = await parseMoviesFromResponse(response.data, kpConfig.maxMovies);
@@ -165,7 +155,6 @@ async function tryRandomDelays(kpConfig) {
   };
 }
 
-// Создание реалистичных headers
 function createRealisticHeaders() {
   const userAgents = [
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -193,10 +182,9 @@ function createRealisticHeaders() {
   };
 }
 
-// Универсальная функция запроса
 function makeRequest(url, headers) {
   return new Promise((resolve, reject) => {
-    console.log(`   🔗 Запрос к: ${url}`);
+    console.log(`Запрос к: ${url}`);
     
     request({
       url: url,
@@ -204,17 +192,16 @@ function makeRequest(url, headers) {
       timeout: 25000,
       gzip: true,
       followAllRedirects: true,
-      jar: true, // Включаем куки
-      rejectUnauthorized: false // Игнорируем SSL ошибки
+      jar: true,
+      rejectUnauthorized: false
     }, (error, response, body) => {
       if (error) {
         reject(error);
       } else if (response.statusCode !== 200) {
         reject(new Error(`HTTP ${response.statusCode}: ${response.statusMessage}`));
       } else {
-        console.log(`   ✅ Ответ получен (${body.length} байт)`);
+        console.log(`Ответ получен (${body.length} байт)`);
         
-        // Проверяем на блокировку
         if (body.includes('captcha') || body.includes('Доступ ограничен') || body.includes('bot')) {
           reject(new Error('Сайт заблокировал доступ (капча/антибот)'));
         }
@@ -225,19 +212,16 @@ function makeRequest(url, headers) {
   });
 }
 
-// Парсинг фильмов из HTML
 async function parseMoviesFromResponse(html, maxMovies) {
   const $ = cheerio.load(html);
   const movies = [];
   
-  console.log('🔍 Анализируем HTML структуру...');
+  console.log('Анализируем HTML структуру...');
   
-  // Анализ страницы
-  console.log(`   📊 Script тегов: ${$('script').length}`);
-  console.log(`   📊 Div элементов: ${$('div').length}`);
-  console.log(`   📊 Ссылок на фильмы: ${$('a[href*="/film/"]').length}`);
+  console.log(`Script тегов: ${$('script').length}`);
+  console.log(`Div элементов: ${$('div').length}`);
+  console.log(`Ссылок на фильмы: ${$('a[href*="/film/"]').length}`);
   
-  // Пробуем разные селекторы
   const selectors = [
     'a[data-test-id="next-link"][href^="/film/"]',
     'a[href^="/film/"] .styles_mainTitle_RHG25',
@@ -247,7 +231,7 @@ async function parseMoviesFromResponse(html, maxMovies) {
   
   for (const selector of selectors) {
     const elements = $(selector);
-    console.log(`   🔍 Селектор "${selector}": ${elements.length} элементов`);
+    console.log(`Селектор "${selector}": ${elements.length} элементов`);
     
     if (elements.length > 0) {
       elements.each((index, element) => {
@@ -276,11 +260,10 @@ async function parseMoviesFromResponse(html, maxMovies) {
             scrapedAt: new Date().toISOString()
           };
           
-          // Проверяем дубликаты
           const isDuplicate = movies.some(m => m.filmId === movie.filmId);
           if (!isDuplicate) {
             movies.push(movie);
-            console.log(`   🎬 ${movie.rank}. ${movie.title}`);
+            console.log(`${movie.rank}. ${movie.title}`);
           }
         }
       });
@@ -289,16 +272,14 @@ async function parseMoviesFromResponse(html, maxMovies) {
     }
   }
   
-  // Если нашли фильмы, получаем детальную информацию
   if (movies.length > 0) {
-    console.log(`\n📖 Получаем детальную информацию...`);
+    console.log('Получаем детальную информацию...');
     await getDetailedInfo(movies);
   }
   
   return movies;
 }
 
-// Очистка названия
 function cleanTitle(title) {
   return title
     .replace(/\s+/g, ' ')
@@ -306,34 +287,30 @@ function cleanTitle(title) {
     .trim();
 }
 
-// Получение детальной информации
 async function getDetailedInfo(movies) {
   for (let i = 0; i < Math.min(movies.length, 3); i++) {
     const movie = movies[i];
     
     try {
-      console.log(`   🔗 Детали для: ${movie.title}`);
-      await delay(2000); // Задержка между запросами
+      console.log(`Детали для: ${movie.title}`);
+      await delay(2000);
       
       const headers = createRealisticHeaders();
       const response = await makeRequest(movie.url, headers);
       const $ = cheerio.load(response.data);
       
-      // Оригинальное название
       movie.originalTitle = $('.styles_originalTitle__nZWQK').text().trim() || 'N/A';
       
-      // Сборы
       movie.boxOffice = {
         usa: $('[data-test-id="usaBox"] a').text().trim() || 'N/A',
         world: $('[data-test-id="worldBox"] a').text().trim() || 'N/A'
       };
       
-      // Актеры
       movie.actors = [];
       const actorElements = $('li.styles_root__faLVg a.styles_link__FCSwj[itemprop="actor"]');
       
-      actorElements.each((index, element) => {
-        if (index < 2) { // Ограничиваем количество
+      actorElements.each((index, element) {
+        if (index < 2) {
           const $element = $(element);
           movie.actors.push({
             russianName: $element.text().trim(),
@@ -343,82 +320,26 @@ async function getDetailedInfo(movies) {
         }
       });
       
-      console.log(`   ✅ ${movie.title} - ${movie.originalTitle}`);
+      console.log(`${movie.title} - ${movie.originalTitle}`);
       
     } catch (error) {
-      console.log(`   ❌ Ошибка деталей: ${error.message}`);
+      console.log(`Ошибка деталей: ${error.message}`);
       movie.error = error.message;
     }
   }
 }
 
-// Создание заглушки с примером данных
-function createStubData() {
-  console.log('📝 Создаем пример данных для отчета...');
-  
-  const stubMovies = [
-    {
-      rank: 1,
-      title: "Аватар",
-      originalTitle: "Avatar",
-      url: "https://www.kinopoisk.ru/film/278/",
-      filmId: "278",
-      boxOffice: {
-        usa: "$785,221,649",
-        world: "$2,923,710,708"
-      },
-      actors: [
-        {
-          russianName: "Сэм Уортингтон",
-          originalName: "Sam Worthington",
-          url: "https://www.kinopoisk.ru/name/1385305/"
-        },
-        {
-          russianName: "Зои Салдана", 
-          originalName: "Zoe Saldana",
-          url: "https://www.kinopoisk.ru/name/657400/"
-        }
-      ],
-      note: "Пример данных (сайт заблокирован)"
-    },
-    {
-      rank: 2,
-      title: "Мстители: Финал",
-      originalTitle: "Avengers: Endgame", 
-      url: "https://www.kinopoisk.ru/film/843649/",
-      filmId: "843649",
-      boxOffice: {
-        usa: "$858,373,000",
-        world: "$2,799,439,100"
-      },
-      actors: [
-        {
-          russianName: "Роберт Дауни-мл.",
-          originalName: "Robert Downey Jr.",
-          url: "https://www.kinopoisk.ru/name/2047/"
-        },
-        {
-          russianName: "Крис Эванс",
-          originalName: "Chris Evans", 
-          url: "https://www.kinopoisk.ru/name/579415/"
-        }
-      ],
-      note: "Пример данных (сайт заблокирован)"
-    }
-  ];
-  
+function createEmptyData() {
   return {
     source: 'Kinopoisk - Топ мировых сборов',
     sourceUrl: BASE_URL,
     chartUrl: 'https://www.kinopoisk.ru/lists/movies/box-world-not-usa/',
     fetchedAt: new Date().toISOString(),
-    totalMovies: stubMovies.length,
-    successful: stubMovies.length,
+    totalMovies: 0,
+    successful: 0,
     failed: 0,
-    chartDescription: 'Топ фильмов по мировым сборам (без США)',
-    movies: stubMovies,
-    note: 'Данные являются примером (сайт заблокировал запросы)',
-    stub: true
+    chartDescription: 'Топ фильмов по мировым сборам',
+    movies: []
   };
 }
 
