@@ -6,7 +6,7 @@ class YAMLLoader {
   static loadConfig(filePath) {
     try {
       const absolutePath = path.resolve(filePath);
-      console.log(`📁 Загрузка конфигурации из: ${absolutePath}`);
+      console.log(`Загрузка конфигурации из: ${absolutePath}`);
       
       if (!fs.existsSync(absolutePath)) {
         throw new Error(`Файл не существует: ${absolutePath}`);

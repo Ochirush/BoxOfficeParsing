@@ -22,14 +22,14 @@ async function fetchBoxOfficeMojoDetailed() {
       basicMoviesData = basicData.movies || [];
       console.log(`Загружено ${basicMoviesData.length} фильмов для детализации`);
     } catch (error) {
-      console.log('Неудалось загрузить базовые данные, собираем заново...');
+      console.log('Не удалось загрузить базовые данные, собираем заново...');
       const { fetchBoxOfficeMojo } = require('./boxOfficeMojo');
       const basicResult = await fetchBoxOfficeMojo();
       basicMoviesData = basicResult.movies || [];
     }
     
     if (basicMoviesData.length === 0) {
-      throw new Error('Нет данных о фильмов для детализации');
+      throw new Error('Нет данных о фильмах для детализации');
     }
     
     const detailedMoviesData = [];
@@ -40,8 +40,6 @@ async function fetchBoxOfficeMojoDetailed() {
       startTime: new Date().toISOString()
     };
     
-    
-    
     for (let i = 0; i < progress.total; i++) {
       const movie = basicMoviesData[i];
       
@@ -51,6 +49,8 @@ async function fetchBoxOfficeMojoDetailed() {
         const detailedMovie = await fetchMovieDetails(movie, mojoConfig.headers);
         detailedMoviesData.push(detailedMovie);
         progress.completed++;
+        
+        console.log(`Детализировано ${progress.completed}/${progress.total}: ${movie.title}`);
         
       } catch (error) {
         console.error(`Ошибка при обработке фильма "${movie.title}":`, error.message);
@@ -63,8 +63,6 @@ async function fetchBoxOfficeMojoDetailed() {
           detailed: false
         });
       }
-      
-      await saveProgress(progress, detailedMoviesData);
     }
     
     const resultData = {
@@ -79,12 +77,7 @@ async function fetchBoxOfficeMojoDetailed() {
     };
     
     await saveData(resultData, 'boxoffice_mojo_detailed');
-    console.log('данные успешно сохранены!');
-    
-    try {
-      const progressPath = path.join(__dirname, '../../data/boxoffice_mojo_detailed_progress.yaml');
-      await fs.unlink(progressPath);
-    } catch (error) {}
+    console.log('Детализированные данные Box Office Mojo успешно сохранены!');
     
     return resultData;
     
@@ -101,7 +94,6 @@ async function fetchBoxOfficeMojoDetailed() {
     };
   }
 }
-
 async function fetchMovieDetails(movie, headers) {
   if (!movie.url || movie.url === 'N/A') {
     throw new Error('URL фильма недоступен');
@@ -241,7 +233,6 @@ function extractBudget($, detailedInfo) {
 }
 
 function extractRuntime($, detailedInfo) {
- 
   const runtimeDiv = $('div.a-section.a-spacing-none').filter((i, el) => {
     return $(el).find('span').first().text().trim() === 'Running Time';
   });
@@ -253,7 +244,6 @@ function extractRuntime($, detailedInfo) {
       return;
     }
   }
-  
 
   const runtimeLabel = $('span:contains("Running Time")');
   if (runtimeLabel.length > 0) {
@@ -269,13 +259,12 @@ function extractRuntime($, detailedInfo) {
       allSpans.each((i, span) => {
         if ($(span).text().trim() === 'Running Time' && i < allSpans.length - 1) {
           detailedInfo.runtime = $(allSpans[i + 1]).text().trim();
-          return false; 
+          return false;
         }
       });
       if (detailedInfo.runtime) return;
     }
   }
-  
 
   $('td').each((index, cell) => {
     const $cell = $(cell);
@@ -285,28 +274,13 @@ function extractRuntime($, detailedInfo) {
       const nextCell = $cell.next('td');
       if (nextCell.length > 0) {
         detailedInfo.runtime = nextCell.text().trim();
-        return false; 
+        return false;
       }
     }
   });
   
-  
   if (!detailedInfo.runtime) {
     detailedInfo.runtime = 'N/A';
-  }
-}
-
-async function saveProgress(progress, data) {
-  const progressData = {
-    ...progress,
-    currentTime: new Date().toISOString(),
-    data: data
-  };
-  
-  try {
-    await saveData(progressData, 'boxoffice_mojo_detailed_progress');
-  } catch (error) {
-    console.error('Ошибка сохранения прогресса:', error.message);
   }
 }
 
