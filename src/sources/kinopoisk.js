@@ -309,7 +309,7 @@ async function getDetailedInfo(movies) {
       movie.actors = [];
       const actorElements = $('li.styles_root__faLVg a.styles_link__FCSwj[itemprop="actor"]');
       
-      actorElements.each((index, element) {
+      actorElements.each((index, element)=>{
         if (index < 2) {
           const $element = $(element);
           movie.actors.push({
