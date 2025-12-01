@@ -4,6 +4,10 @@
   "description": "",
   "main": "index.js",
   "scripts": {
+    "start": "node src/scheduler.js",
+    "scheduler": "node src/scheduler.js",
+    "parser": "node src/index.js",
+    "processor": "node src/processData.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
@@ -14,6 +18,7 @@
     "cheerio": "^1.1.2",
     "fs-extra": "^11.3.2",
     "js-yaml": "^4.1.1",
+    "node-cron": "^4.2.1",
     "pg": "^8.16.3",
     "request": "^2.88.2",
     "yaml": "^2.8.1"
