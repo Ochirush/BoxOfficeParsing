@@ -3,18 +3,18 @@ const fs = require('fs');
 const path = require('path');
 const yaml = require('js-yaml');
 
-// Маппинг полей из разных источников к стандартным названиям
+
 const FIELD_MAPPINGS = {
-  'worldwideGross': 'totalGross', // Box Office Mojo
-  'worldwideRevenue': 'totalGross', // Rotten Tomatoes
-  'domesticRevenue': 'domesticGross', // Rotten Tomatoes
-  'weekend_gross': 'weekendGross', // если в snake_case
-  'total_gross': 'totalGross', // если в snake_case
-  'domestic_gross': 'domesticGross', // если в snake_case
-  'international_gross': 'internationalGross' // если в snake_case
+  'worldwideGross': 'totalGross', 
+  'worldwideRevenue': 'totalGross', 
+  'domesticRevenue': 'domesticGross', 
+  'weekend_gross': 'weekendGross', 
+  'total_gross': 'totalGross', 
+  'domestic_gross': 'domesticGross', 
+  'international_gross': 'internationalGross' 
 };
 
-// Упрощенная функция стандартизации
+
 function standardizeRevenueForDB(revenue) {
   if (!revenue || revenue === 'N/A' || revenue === 'n/a' || revenue === '' || revenue === null || revenue === undefined) {
     return null;
@@ -27,17 +27,17 @@ function standardizeRevenueForDB(revenue) {
   if (typeof revenue === 'string') {
     revenue = revenue.trim();
     
-    // Если строка уже содержит только цифры, возвращаем как число
+    
     if (/^\d+$/.test(revenue)) {
       return parseInt(revenue);
     }
     
-    // Пробуем извлечь число из строки
+    
     const match = revenue.match(/\$?([\d,\.]+)/);
     if (match) {
       const amount = parseFloat(match[1].replace(/,/g, ''));
       if (!isNaN(amount)) {
-        // Проверяем на миллиарды/миллионы
+        
         const revenueLower = revenue.toLowerCase();
         if (revenueLower.includes('billion') || revenueLower.includes('b')) {
           return Math.round(amount * 1000000000);
@@ -54,7 +54,7 @@ function standardizeRevenueForDB(revenue) {
   return null;
 }
 
-// Функция для нормализации названий полей
+
 function normalizeMovieFields(movie, source) {
   const normalized = {
     rank: null,
@@ -71,7 +71,7 @@ function normalizeMovieFields(movie, source) {
     scrapedAt: null
   };
 
-  // Копируем все поля с учетом маппинга
+ 
   for (const [key, value] of Object.entries(movie)) {
     const normalizedKey = FIELD_MAPPINGS[key] || key;
     
@@ -105,33 +105,33 @@ function normalizeMovieFields(movie, source) {
     }
   }
 
-  // Специальная обработка для разных источников
+  
   switch (source) {
     case 'Box Office Mojo':
     case 'Box Office Mojo - Detailed':
-      // Worldwide Gross -> Total Gross уже обработано через маппинг
+      
       break;
       
     case 'Rotten Tomatoes':
-      // Rotten Tomatoes часто дублирует domesticRevenue как worldwideRevenue
+      
       if (normalized.domesticGross && !normalized.totalGross) {
         normalized.totalGross = normalized.domesticGross;
       }
       break;
       
     case 'IMDb Box Office':
-      // IMDb имеет weekendGross и totalGross
+      
       break;
       
     case 'The Numbers':
-      // The Numbers имеет weekendGross и totalGross
+      
       break;
   }
 
   return normalized;
 }
 
-// Чтение всех YAML файлов из папки "data"
+
 function readYAMLFilesFromDirectory(directoryPath) {
   try {
     const fileNames = fs.readdirSync(directoryPath);
@@ -159,14 +159,14 @@ function readYAMLFilesFromDirectory(directoryPath) {
   }
 }
 
-// Создание таблицы с правильной структурой
+
 async function createOrUpdateTable(client) {
   try {
-    // Удаляем существующую таблицу если есть
+    
     await client.query('DROP TABLE IF EXISTS movies');
     console.log('Старая таблица удалена (если существовала)');
     
-    // Создаем новую таблицу с правильной структурой
+    
     const createTableQuery = `
       CREATE TABLE movies (
           id SERIAL PRIMARY KEY,
@@ -192,7 +192,7 @@ async function createOrUpdateTable(client) {
     await client.query(createTableQuery);
     console.log('Новая таблица movies создана');
     
-    // Дополнительные индексы
+    
     const createIndexesQuery = `
       CREATE INDEX idx_movies_title ON movies(title);
       CREATE INDEX idx_movies_source ON movies(source);
@@ -211,7 +211,7 @@ async function createOrUpdateTable(client) {
   }
 }
 
-// Функция для вставки данных в базу данных
+//ВВВОДИТЬ ДАННЫЕ ДЛЯ БД
 async function insertMoviesData(moviesData) {
   const client = new Client({
     user: 'admin',
@@ -225,19 +225,19 @@ async function insertMoviesData(moviesData) {
     await client.connect();
     console.log(`Подключено к базе данных. Всего фильмов для вставки: ${moviesData.length}`);
 
-    // Создаем или обновляем таблицу
+    
     await createOrUpdateTable(client);
 
     let successCount = 0;
     let errorCount = 0;
     let duplicateCount = 0;
 
-    // Обрабатываем каждый фильм из данных
+   
     for (let i = 0; i < moviesData.length; i++) {
       const movie = moviesData[i];
       
       try {
-        // Вставляем запись с обработкой дубликатов
+        
         const insertQuery = `
           INSERT INTO movies 
           (rank, title, year, weekend_gross, total_gross, domestic_gross, international_gross, rating, release_date, source, url, scraped_at)
@@ -247,7 +247,7 @@ async function insertMoviesData(moviesData) {
           RETURNING id
         `;
 
-        // Выполняем запрос на вставку данных в таблицу
+        
         const result = await client.query(insertQuery, [
           movie.rank,
           movie.title || 'Unknown',
@@ -275,7 +275,7 @@ async function insertMoviesData(moviesData) {
         errorCount++;
         console.error(`[${i + 1}/${moviesData.length}] Ошибка при добавлении фильма "${movie.title}":`, movieError.message);
         
-        // Детальная информация для отладки
+       
         console.log('Данные фильма для отладки:', JSON.stringify(movie, null, 2));
       }
     }
@@ -295,7 +295,7 @@ async function insertMoviesData(moviesData) {
   }
 }
 
-// Основная функция для обработки всех YAML файлов и вставки данных в БД
+
 async function processYAMLData() {
   const directoryPath = path.join(__dirname, '../data');
   const data = readYAMLFilesFromDirectory(directoryPath);
@@ -307,7 +307,7 @@ async function processYAMLData() {
 
   const allMoviesData = [];
 
-  // Обрабатываем данные каждого источника
+  
   data.forEach((sourceData, index) => {
     const source = sourceData.source || 'Unknown';
     console.log(`\nОбработка источника ${index + 1}: ${source}`);
@@ -315,17 +315,17 @@ async function processYAMLData() {
     if (sourceData.movies && Array.isArray(sourceData.movies)) {
       sourceData.movies.forEach((movie, movieIndex) => {
         try {
-          // Нормализуем поля фильма
+          
           const normalizedMovie = normalizeMovieFields(movie, source);
           
-          // Добавляем недостающие данные из sourceData
+          
           normalizedMovie.scrapedAt = normalizedMovie.scrapedAt || 
                                      movie.scrapedAt || 
                                      sourceData.fetchedAt || 
                                      sourceData.lastUpdated ||
                                      new Date().toISOString();
           
-          // Извлекаем год из releaseDate если нет года
+          
           if (!normalizedMovie.year && normalizedMovie.releaseDate) {
             const yearMatch = normalizedMovie.releaseDate.toString().match(/(\d{4})/);
             if (yearMatch) {
@@ -333,12 +333,12 @@ async function processYAMLData() {
             }
           }
           
-          // Извлекаем год из названия (например, "Avatar (2009)")
+          
           if (!normalizedMovie.year && normalizedMovie.title) {
             const yearMatch = normalizedMovie.title.match(/\((\d{4})\)/);
             if (yearMatch) {
               normalizedMovie.year = parseInt(yearMatch[1]);
-              // Убираем год из названия
+              
               normalizedMovie.title = normalizedMovie.title.replace(/\s*\(\d{4}\)\s*$/, '').trim();
             }
           }
@@ -358,7 +358,7 @@ async function processYAMLData() {
 
   console.log(`\nВсего собрано фильмов: ${allMoviesData.length}`);
   
-  // Выводим статистику по источникам
+  
   const sourceStats = {};
   allMoviesData.forEach(movie => {
     sourceStats[movie.source] = (sourceStats[movie.source] || 0) + 1;
@@ -369,7 +369,7 @@ async function processYAMLData() {
     console.log(`  ${source}: ${count} фильмов`);
   });
   
-  // Выводим примеры данных для проверки
+  
   console.log('\nПримеры нормализованных данных:');
   for (let i = 0; i < Math.min(3, allMoviesData.length); i++) {
     const movie = allMoviesData[i];
@@ -381,11 +381,11 @@ async function processYAMLData() {
     console.log('---');
   }
 
-  // Вставляем все данные в базу данных
+  
   await insertMoviesData(allMoviesData);
 }
 
-// Проверка данных перед вставкой
+
 function validateMoviesData(moviesData) {
   console.log('\n=== ВАЛИДАЦИЯ ДАННЫХ ===');
   
@@ -418,7 +418,7 @@ function validateMoviesData(moviesData) {
   return issues.length === 0;
 }
 
-// Запускаем обработку данных
+
 async function main() {
   try {
     console.log('=== НАЧАЛО ОБРАБОТКИ ДАННЫХ ===');
