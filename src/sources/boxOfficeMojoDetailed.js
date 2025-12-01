@@ -5,16 +5,17 @@ const { delay } = require('../utils/delay');
 const YAMLLoader = require('../utils/yamlLoader');
 const fs = require('fs').promises;
 const path = require('path');
+const { standardizeRevenue } = require('../utils/standardizeRevenue');  // Импортируем функцию для стандартизации сборов
 
 const BASE_URL = 'https://www.boxofficemojo.com';
 
 async function fetchBoxOfficeMojoDetailed() {
   console.log('Сбор детализированных данных с Box Office Mojo...');
-  
+
   try {
     const config = YAMLLoader.loadConfig('./src/config/requests.yaml');
     const mojoConfig = config.sources.boxOfficeMojo;
-    
+
     let basicMoviesData = [];
     try {
       const basicDataPath = path.join(__dirname, '../../data/boxoffice_mojo_data.yaml');
@@ -27,11 +28,11 @@ async function fetchBoxOfficeMojoDetailed() {
       const basicResult = await fetchBoxOfficeMojo();
       basicMoviesData = basicResult.movies || [];
     }
-    
+
     if (basicMoviesData.length === 0) {
       throw new Error('Нет данных о фильмах для детализации');
     }
-    
+
     const detailedMoviesData = [];
     const progress = {
       total: Math.min(basicMoviesData.length, mojoConfig.detailedMaxMovies),
@@ -39,23 +40,23 @@ async function fetchBoxOfficeMojoDetailed() {
       failed: 0,
       startTime: new Date().toISOString()
     };
-    
+
     for (let i = 0; i < progress.total; i++) {
       const movie = basicMoviesData[i];
-      
+
       try {
         await delay(mojoConfig.delayBetweenRequests);
-        
+
         const detailedMovie = await fetchMovieDetails(movie, mojoConfig.headers);
         detailedMoviesData.push(detailedMovie);
         progress.completed++;
-        
+
         console.log(`Детализировано ${progress.completed}/${progress.total}: ${movie.title}`);
-        
+
       } catch (error) {
         console.error(`Ошибка при обработке фильма "${movie.title}":`, error.message);
         progress.failed++;
-        
+
         detailedMoviesData.push({
           ...movie,
           error: true,
@@ -64,7 +65,7 @@ async function fetchBoxOfficeMojoDetailed() {
         });
       }
     }
-    
+
     const resultData = {
       source: 'Box Office Mojo - Detailed',
       sourceUrl: BASE_URL,
@@ -75,12 +76,12 @@ async function fetchBoxOfficeMojoDetailed() {
       processingTime: new Date().toISOString(),
       movies: detailedMoviesData
     };
-    
+
     await saveData(resultData, 'boxoffice_mojo_detailed');
     console.log('Детализированные данные Box Office Mojo успешно сохранены!');
-    
+
     return resultData;
-    
+
   } catch (error) {
     console.error('Ошибка при сборе детализированных данных Box Office Mojo:', error.message);
     return {
@@ -94,11 +95,12 @@ async function fetchBoxOfficeMojoDetailed() {
     };
   }
 }
+
 async function fetchMovieDetails(movie, headers) {
   if (!movie.url || movie.url === 'N/A') {
     throw new Error('URL фильма недоступен');
   }
-  
+
   const response = await new Promise((resolve, reject) => {
     request({
       url: movie.url,
@@ -115,37 +117,37 @@ async function fetchMovieDetails(movie, headers) {
       }
     });
   });
-  
+
   const $ = cheerio.load(response.data);
-  
+
   const detailedInfo = {
     ...movie,
     detailed: true,
     scrapedAt: new Date().toISOString()
   };
-  
+
   extractBoxOfficeData($, detailedInfo);
-  
+
   const studioLink = $('a[href*="/studio/"]');
   if (studioLink.length > 0) {
     detailedInfo.studio = studioLink.first().text().trim();
   }
-  
+
   const genreSpan = $('span:contains("Genre")').next('span');
   if (genreSpan.length > 0) {
     let genreText = genreSpan.text().trim();
     genreText = genreText.replace(/\s+/g, ' ').replace(/\n/g, ', ');
     detailedInfo.genre = genreText;
   }
-  
+
   const ratingSpan = $('span:contains("Rating")').next('span');
   if (ratingSpan.length > 0) {
     detailedInfo.rating = ratingSpan.text().trim();
   }
-  
+
   extractBudget($, detailedInfo);
   extractRuntime($, detailedInfo);
-  
+
   return detailedInfo;
 }
 
@@ -154,50 +156,50 @@ function extractBoxOfficeData($, detailedInfo) {
   if (performanceSummary.length > 0) {
     const moneyValues = performanceSummary.find('.money');
     if (moneyValues.length >= 2) {
-      detailedInfo.domesticGross = moneyValues.eq(0).text().trim();
-      detailedInfo.internationalGross = moneyValues.eq(1).text().trim();
+      detailedInfo.domesticGross = standardizeRevenue(moneyValues.eq(0).text().trim());  // Применяем стандартизацию
+      detailedInfo.internationalGross = standardizeRevenue(moneyValues.eq(1).text().trim());  // Применяем стандартизацию
       return;
     }
   }
-  
+
   const domesticLabel = $('span:contains("Domestic")').parent();
   if (domesticLabel.length > 0) {
     const domesticMoney = domesticLabel.find('.money').first();
     if (domesticMoney.length > 0) {
-      detailedInfo.domesticGross = domesticMoney.text().trim();
+      detailedInfo.domesticGross = standardizeRevenue(domesticMoney.text().trim());  // Применяем стандартизацию
     }
   }
-  
+
   const internationalLabel = $('span:contains("International")').parent();
   if (internationalLabel.length > 0) {
     const internationalMoney = internationalLabel.find('.money').first();
     if (internationalMoney.length > 0) {
-      detailedInfo.internationalGross = internationalMoney.text().trim();
+      detailedInfo.internationalGross = standardizeRevenue(internationalMoney.text().trim());  // Применяем стандартизацию
     }
   }
-  
+
   $('.mojo-table').each((index, table) => {
     const $table = $(table);
     const rows = $table.find('tr');
-    
+
     rows.each((i, row) => {
       const $row = $(row);
       const cells = $row.find('td');
-      
+
       if (cells.length >= 3) {
         const firstCell = cells.eq(0).text().trim();
-        
+
         if (firstCell.includes('Domestic') || firstCell.includes('North America')) {
           const moneyCell = cells.find('.money').first();
           if (moneyCell.length > 0 && !detailedInfo.domesticGross) {
-            detailedInfo.domesticGross = moneyCell.text().trim();
+            detailedInfo.domesticGross = standardizeRevenue(moneyCell.text().trim());  // Применяем стандартизацию
           }
         }
-        
+
         if (firstCell.includes('International') || firstCell.includes('Foreign')) {
           const moneyCell = cells.find('.money').first();
           if (moneyCell.length > 0 && !detailedInfo.internationalGross) {
-            detailedInfo.internationalGross = moneyCell.text().trim();
+            detailedInfo.internationalGross = standardizeRevenue(moneyCell.text().trim());  // Применяем стандартизацию
           }
         }
       }
@@ -210,21 +212,21 @@ function extractBudget($, detailedInfo) {
   if (budgetLabel.length > 0) {
     const budgetMoney = budgetLabel.find('.money').first();
     if (budgetMoney.length > 0) {
-      detailedInfo.budget = budgetMoney.text().trim();
+      detailedInfo.budget = standardizeRevenue(budgetMoney.text().trim());  // Применяем стандартизацию
       return;
     }
   }
-  
+
   $('td').each((index, cell) => {
     const $cell = $(cell);
     const text = $cell.text().trim();
-    
+
     if (text === 'Budget' || text === 'Production Budget') {
       const nextCell = $cell.next('td');
       if (nextCell.length > 0) {
         const money = nextCell.find('.money').first();
         if (money.length > 0) {
-          detailedInfo.budget = money.text().trim();
+          detailedInfo.budget = standardizeRevenue(money.text().trim());  // Применяем стандартизацию
           return false;
         }
       }
@@ -236,7 +238,7 @@ function extractRuntime($, detailedInfo) {
   const runtimeDiv = $('div.a-section.a-spacing-none').filter((i, el) => {
     return $(el).find('span').first().text().trim() === 'Running Time';
   });
-  
+
   if (runtimeDiv.length > 0) {
     const runtimeSpan = runtimeDiv.find('span').last();
     if (runtimeSpan.length > 0) {
@@ -252,7 +254,7 @@ function extractRuntime($, detailedInfo) {
       detailedInfo.runtime = runtimeValue.text().trim();
       return;
     }
-  
+
     const parent = runtimeLabel.parent();
     const allSpans = parent.find('span');
     if (allSpans.length >= 2) {
@@ -269,7 +271,7 @@ function extractRuntime($, detailedInfo) {
   $('td').each((index, cell) => {
     const $cell = $(cell);
     const text = $cell.text().trim();
-    
+
     if (text === 'Running Time' || text === 'Runtime') {
       const nextCell = $cell.next('td');
       if (nextCell.length > 0) {
@@ -278,7 +280,7 @@ function extractRuntime($, detailedInfo) {
       }
     }
   });
-  
+
   if (!detailedInfo.runtime) {
     detailedInfo.runtime = 'N/A';
   }

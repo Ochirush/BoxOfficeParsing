@@ -3,16 +3,17 @@ const cheerio = require('cheerio');
 const { saveData } = require('../utils/saveData');
 const { delay } = require('../utils/delay');
 const YAMLLoader = require('../utils/yamlLoader');
+const { standardizeRevenue } = require('../utils/standardizeRevenue');
 
 const BASE_URL = 'https://www.imdb.com';
 
 async function fetchIMDB() {
   console.log('Сбор данных с IMDb Box Office...');
-  
+
   try {
     const config = YAMLLoader.loadConfig('./src/config/requests.yaml');
     const imdbConfig = config.sources.imdb;
-    
+
     const chartResponse = await new Promise((resolve, reject) => {
       request({
         url: imdbConfig.chartUrl,
@@ -29,33 +30,38 @@ async function fetchIMDB() {
         }
       });
     });
-    
+
     const $ = cheerio.load(chartResponse.data);
     const moviesData = [];
+
+    // Ищем все контейнеры с фильмами
+    const movieContainers = $('div.sc-b4f120f6-0.bQhtuJ');
     
-    const movieLinks = $('a[href^="/title/tt"]');
-    let rank = 1;
-    
-    movieLinks.each((index, link) => {
+    console.log(`Найдено контейнеров с фильмами: ${movieContainers.length}`);
+
+    movieContainers.each((index, container) => {
       if (moviesData.length >= imdbConfig.maxMovies) return false;
+
+      const $container = $(container);
       
-      const $link = $(link);
-      const href = $link.attr('href');
+      // Получаем ранг из ссылки или по порядку
+      const rank = moviesData.length + 1;
       
-      if (!href || !href.includes('/title/tt')) return;
-      
-      const movieElement = $link.closest('div, li, tr').length > 0 ? $link.closest('div, li, tr') : $link.parent();
-      
-      const title = getText($, movieElement, 'h3, h4, [data-testid="title"]');
-      const url = 'https://www.imdb.com' + href;
-      const id = href.split('/')[2];
+      // Получаем название фильма и ссылку
+      const titleLink = $container.find('a.ipc-title-link-wrapper');
+      const title = titleLink.find('h3.ipc-title__text').text().trim();
+      const href = titleLink.attr('href');
+      const url = href ? BASE_URL + href.split('?')[0] : 'N/A';
+      const idMatch = href ? href.match(/title\/(tt\d+)/) : null;
+      const id = idMatch ? idMatch[1] : `tt${Date.now()}${index}`;
       
       if (!title || title === 'N/A') return;
-      
-      const boxOfficeData = getBoxOfficeData($, movieElement);
-      
+
+      // Получаем данные о сборах
+      const boxOfficeData = getBoxOfficeData($, $container);
+
       const movie = {
-        rank: rank++,
+        rank: rank,
         title: title,
         url: url,
         id: id,
@@ -63,24 +69,24 @@ async function fetchIMDB() {
         totalGross: boxOfficeData.total || 'N/A',
         scrapedAt: new Date().toISOString()
       };
-      
-      const isDuplicate = moviesData.some(m => m.id === movie.id);
-      if (!isDuplicate) {
-        moviesData.push(movie);
-      }
+
+      moviesData.push(movie);
+      console.log(`Добавлен фильм: ${title} - Weekend: ${boxOfficeData.weekend || 'N/A'}, Total: ${boxOfficeData.total || 'N/A'}`);
     });
-    
-    console.log(`Найдено фильмов: ${moviesData.length}`);
-    
+
+    console.log(`Обработано фильмов: ${moviesData.length}`);
+
+    // Если фильмов меньше минимального, пробуем альтернативный парсинг
     if (moviesData.length < imdbConfig.minMovies) {
+      console.log('Основной парсинг дал мало результатов, пробуем альтернативный метод...');
       await alternativeIMDBParsing($, moviesData, imdbConfig.maxMovies);
     }
-    
-    if (imdbConfig.fetchDetailed) {
+
+    if (imdbConfig.fetchDetailed && moviesData.length > 0) {
       console.log('Сбор детализированных данных...');
       await fetchDetailedMovieData(moviesData, imdbConfig);
     }
-    
+
     const resultData = {
       source: 'IMDb Box Office',
       sourceUrl: BASE_URL,
@@ -90,12 +96,12 @@ async function fetchIMDB() {
       chartType: 'Weekend Box Office',
       movies: moviesData
     };
-    
+
     await saveData(resultData, 'imdb_data');
     console.log('Данные IMDb успешно сохранены!');
-    
+
     return resultData;
-    
+
   } catch (error) {
     console.error('Ошибка при сборе данных IMDb:', error.message);
     return {
@@ -110,34 +116,151 @@ async function fetchIMDB() {
   }
 }
 
+// Исправленная функция для получения данных о сборах
+function getBoxOfficeData($, containerElement) {
+  const boxOfficeData = {};
+  
+  // Ищем контейнер с данными о сборах по data-testid
+  const boxOfficeContainer = containerElement.find('[data-testid="title-metadata-box-office-data-container"]');
+  
+  if (boxOfficeContainer.length > 0) {
+    // Проходим по всем элементам списка
+    boxOfficeContainer.find('li.sc-382281d-1.gPDhWQ').each((i, li) => {
+      const $li = $(li);
+      const label = $li.find('span').first().text().trim();
+      const value = $li.find('span.sc-382281d-2').text().trim();
+      
+      console.log(`Найдены данные: ${label} = ${value}`);
+      
+      if (label.includes('Weekend Gross')) {
+        boxOfficeData.weekend = standardizeRevenue(value);
+      } else if (label.includes('Total Gross')) {
+        boxOfficeData.total = standardizeRevenue(value);
+      }
+    });
+  } else {
+    console.log('Контейнер с данными о сборах не найден, пробуем другие методы...');
+    
+    // Альтернативный поиск по тексту
+    containerElement.find('li, div, span').each((i, elem) => {
+      const text = $(elem).text().trim();
+      if (text.includes('Weekend Gross') || text.includes('Total Gross')) {
+        // Ищем значение сбора в следующем элементе
+        const value = $(elem).find('span').last().text().trim();
+        if (value.includes('$')) {
+          if (text.includes('Weekend Gross')) {
+            boxOfficeData.weekend = standardizeRevenue(value);
+          } else if (text.includes('Total Gross')) {
+            boxOfficeData.total = standardizeRevenue(value);
+          }
+        }
+      }
+    });
+  }
+  
+  return boxOfficeData;
+}
+
+// Альтернативный метод парсинга по структуре из HTML
+async function alternativeIMDBParsing($, moviesData, maxMovies) {
+  console.log('Используем альтернативный метод парсинга по всей странице...');
+  
+  // Ищем все блоки с фильмами по более общим селекторам
+  const movieBlocks = $('div[class*="cli-children"], div[class*="sc-"]');
+  const processedIds = new Set(moviesData.map(m => m.id));
+  
+  movieBlocks.each((index, block) => {
+    if (moviesData.length >= maxMovies) return false;
+    
+    const $block = $(block);
+    
+    // Проверяем, содержит ли блок название фильма
+    const titleElement = $block.find('h3.ipc-title__text, h4, [class*="title"]');
+    const title = titleElement.text().trim();
+    
+    if (!title || title.length < 2) return;
+    
+    // Ищем ссылку
+    const link = $block.find('a[href*="/title/tt"]').first();
+    const href = link.attr('href');
+    if (!href) return;
+    
+    const idMatch = href.match(/title\/(tt\d+)/);
+    if (!idMatch) return;
+    
+    const id = idMatch[1];
+    
+    // Пропускаем дубликаты
+    if (processedIds.has(id)) return;
+    processedIds.add(id);
+    
+    // Ищем данные о сборах в этом блоке
+    let weekendGross = 'N/A';
+    let totalGross = 'N/A';
+    
+    // Ищем элементы с текстом "Weekend Gross" или "Total Gross"
+    $block.find('*').each((i, elem) => {
+      const elemText = $(elem).text().trim();
+      if (elemText.includes('Weekend Gross')) {
+        // Пытаемся найти значение сбора
+        const nextSpan = $(elem).find('span.sc-382281d-2').first();
+        if (nextSpan.length) {
+          weekendGross = standardizeRevenue(nextSpan.text().trim());
+        }
+      } else if (elemText.includes('Total Gross')) {
+        const nextSpan = $(elem).find('span.sc-382281d-2').first();
+        if (nextSpan.length) {
+          totalGross = standardizeRevenue(nextSpan.text().trim());
+        }
+      }
+    });
+    
+    const movie = {
+      rank: moviesData.length + 1,
+      title: title,
+      url: BASE_URL + href.split('?')[0],
+      id: id,
+      weekendGross: weekendGross,
+      totalGross: totalGross,
+      scrapedAt: new Date().toISOString()
+    };
+    
+    moviesData.push(movie);
+    console.log(`Альтернативный метод: ${title} - Weekend: ${weekendGross}, Total: ${totalGross}`);
+  });
+  
+  console.log(`Альтернативным методом добавлено фильмов: ${moviesData.length - processedIds.size + processedIds.size}`);
+}
+
+// Остальные функции остаются без изменений
 async function fetchDetailedMovieData(moviesData, imdbConfig) {
   const progress = {
     total: Math.min(moviesData.length, imdbConfig.detailedMaxMovies || moviesData.length),
     completed: 0,
     failed: 0
   };
-  
+
   for (let i = 0; i < progress.total; i++) {
     const movie = moviesData[i];
-    
+
     try {
       await delay(imdbConfig.delayBetweenRequests || 1000);
-      
+
       const detailedInfo = await fetchMovieDetails(movie, imdbConfig.headers);
       Object.assign(movie, detailedInfo);
-      
+
       progress.completed++;
       console.log(`Детализировано ${progress.completed}/${progress.total}: ${movie.title}`);
-      
+
     } catch (error) {
       console.error(`Ошибка при детализации фильма "${movie.title}":`, error.message);
       progress.failed++;
-      
+
       movie.director = 'N/A';
       movie.error = error.message;
     }
   }
-  
+
   console.log(`Детализация завершена: успешно ${progress.completed}, ошибок ${progress.failed}`);
 }
 
@@ -145,7 +268,7 @@ async function fetchMovieDetails(movie, headers) {
   if (!movie.url || movie.url === 'N/A') {
     throw new Error('URL фильма недоступен');
   }
-  
+
   const response = await new Promise((resolve, reject) => {
     request({
       url: movie.url,
@@ -162,184 +285,42 @@ async function fetchMovieDetails(movie, headers) {
       }
     });
   });
-  
+
   const $ = cheerio.load(response.data);
-  
+
   const detailedInfo = {
     scrapedAt: new Date().toISOString()
   };
-  
+
   detailedInfo.director = extractDirector($);
-  
+
   return detailedInfo;
 }
 
 function extractDirector($) {
   const directorLabel = $('span.ipc-metadata-list-item__label:contains("Director"), span.ipc-metadata-list-item__label:contains("Directors")');
-  
+
   if (directorLabel.length > 0) {
     const directorContainer = directorLabel.closest('li').find('.ipc-metadata-list-item__content-container, .ipc-metadata-list-item__list-content');
-    
+
     if (directorContainer.length > 0) {
       const directorLinks = directorContainer.find('a.ipc-metadata-list-item__list-content-item');
       const directors = [];
-      
+
       directorLinks.each((index, link) => {
         const directorName = $(link).text().trim();
         if (directorName && !directors.includes(directorName)) {
           directors.push(directorName);
         }
       });
-      
+
       if (directors.length > 0) {
         return directors.join(', ');
       }
     }
   }
-  
+
   return 'N/A';
-}
-
-function getText($, element, selector) {
-  const found = element.find(selector).first();
-  return found.length > 0 ? found.text().trim() : 'N/A';
-}
-
-function getBoxOfficeData($, movieElement) {
-  const boxOfficeData = {};
-  
-  let container = movieElement.find('[data-testid*="box-office"], [data-testid*="boxoffice"]').first();
-  
-  if (container.length === 0) {
-    container = $('[data-testid*="box-office"], [data-testid*="boxoffice"]').first();
-  }
-  
-  if (container.length === 0) {
-    container = movieElement.find('ul, div').filter((index, el) => {
-      const text = $(el).text();
-      return text.includes('Gross') || text.includes('Budget') || text.includes('Opening');
-    }).first();
-  }
-  
-  if (container.length === 0) return boxOfficeData;
-  
-  const items = container.find('li, div[class*="item"], span[class*="item"]');
-  
-  items.each((index, item) => {
-    const $item = $(item);
-    const text = $item.text();
-    
-    const moneyMatch = text.match(/\$[\d,]+/g);
-    if (!moneyMatch) return;
-    
-    const moneyValue = moneyMatch[0];
-    
-    if (text.includes('Total Gross') || text.includes('Cumulative')) {
-      boxOfficeData.total = moneyValue;
-    } else if (text.includes('Weekend Gross') || text.includes('Weekend')) {
-      boxOfficeData.weekend = moneyValue;
-    }
-  });
-  
-  if (Object.keys(boxOfficeData).length === 0) {
-    searchBoxOfficeInPage($, movieElement, boxOfficeData);
-  }
-  
-  return boxOfficeData;
-}
-
-function searchBoxOfficeInPage($, movieElement, boxOfficeData) {
-  const title = getText($, movieElement, 'h3, h4, [data-testid="title"]');
-  
-  if (title === 'N/A') return;
-  
-  const moneyElements = $('*:contains("$")');
-  
-  moneyElements.each((index, element) => {
-    const $element = $(element);
-    const text = $element.text();
-    
-    const isNearMovie = isElementNearMovie($, movieElement, $element);
-    
-    if (isNearMovie && text.includes('$')) {
-      const moneyValue = text.match(/\$[\d,]+/)?.[0];
-      if (!moneyValue) return;
-      
-      const parentText = $element.parent().text();
-      
-      if (!boxOfficeData.weekend && (text.includes('Weekend') || parentText.includes('Weekend'))) {
-        boxOfficeData.weekend = moneyValue;
-      } else if (!boxOfficeData.total && (text.includes('Total') || parentText.includes('Total') || text.includes('Cumulative'))) {
-        boxOfficeData.total = moneyValue;
-      }
-    }
-  });
-}
-
-function isElementNearMovie($, movieElement, testElement) {
-  const movieContainer = movieElement.closest('div, li, tr');
-  const testContainer = testElement.closest('div, li, tr');
-  
-  return movieContainer.length > 0 && testContainer.length > 0 && 
-         movieContainer[0] === testContainer[0];
-}
-
-async function alternativeIMDBParsing($, moviesData, maxMovies) {
-  const chartItems = $('[data-testid="chart-layout-main-column"] li, .ipc-metadata-list-summary-item');
-  
-  let rank = moviesData.length + 1;
-  
-  chartItems.each((index, item) => {
-    if (moviesData.length >= maxMovies) return false;
-    
-    const $item = $(item);
-    const titleLink = $item.find('a[href^="/title/tt"]').first();
-    
-    if (titleLink.length === 0) return;
-    
-    const title = getText($, $item, 'h3, h4, [data-testid="title"]');
-    const href = titleLink.attr('href');
-    const url = 'https://www.imdb.com' + href;
-    const id = href.split('/')[2];
-    
-    if (!title || title === 'N/A') return;
-    
-    const boxOfficeData = extractBoxOfficeFromItem($, $item);
-    
-    const movie = {
-      rank: rank++,
-      title: title,
-      url: url,
-      id: id,
-      weekendGross: boxOfficeData.weekend || 'N/A',
-      totalGross: boxOfficeData.total || 'N/A',
-      scrapedAt: new Date().toISOString(),
-      method: 'alternative'
-    };
-    
-    const isDuplicate = moviesData.some(m => m.id === movie.id);
-    if (!isDuplicate) {
-      moviesData.push(movie);
-    }
-  });
-}
-
-function extractBoxOfficeFromItem($, item) {
-  const boxOfficeData = {};
-  const text = item.text();
-  
-  const moneyMatches = text.match(/\$[\d,]+/g);
-  if (!moneyMatches) return boxOfficeData;
-  
-  moneyMatches.forEach((money, index) => {
-    if (index === 0 && !boxOfficeData.weekend) {
-      boxOfficeData.weekend = money;
-    } else if (index === 1 && !boxOfficeData.total) {
-      boxOfficeData.total = money;
-    }
-  });
-  
-  return boxOfficeData;
 }
 
 module.exports = { fetchIMDB };
