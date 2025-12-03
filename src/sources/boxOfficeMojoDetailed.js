@@ -5,7 +5,7 @@ const { delay } = require('../utils/delay');
 const YAMLLoader = require('../utils/yamlLoader');
 const fs = require('fs').promises;
 const path = require('path');
-const { standardizeRevenue } = require('../utils/standardizeRevenue');  // Импортируем функцию для стандартизации сборов
+const { standardizeRevenue } = require('../utils/standardizeRevenue');  
 
 const BASE_URL = 'https://www.boxofficemojo.com';
 
