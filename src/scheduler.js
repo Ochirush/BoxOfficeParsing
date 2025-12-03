@@ -20,6 +20,23 @@ const CONFIG = {
 let lockTableReady = false;
 let activeLock = null;
 
+function extractPid(processId) {
+  const pidPart = String(processId || '').split('_')[0];
+  const parsed = Number(pidPart);
+  return Number.isInteger(parsed) ? parsed : null;
+}
+
+function isProcessAlive(pid) {
+  if (!pid) return false;
+
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return false;
+  }
+}
+
 if (!fs.existsSync(CONFIG.logDir)) {
   fs.mkdirSync(CONFIG.logDir, { recursive: true });
 }
@@ -59,6 +76,17 @@ async function acquireLock() {
       return { processId };
     }
 
+    const existingPid = extractPid(lock.processId);
+    const lockOwnerAlive = isProcessAlive(existingPid);
+
+    if (!lockOwnerAlive) {
+      lock.lockedAt = now;
+      lock.processId = processId;
+      await lock.save();
+      log('Блокировка перехвачена: предыдущий процесс не активен', 'warn');
+      return { processId };
+    }
+
     if (lock.lockedAt < staleThreshold) {
       lock.lockedAt = now;
       lock.processId = processId;
@@ -91,13 +119,20 @@ async function releaseLock(lock) {
 async function cleanupOldLocks() {
   try {
     await ensureLockTable();
-    const removed = await SchedulerLock.destroy({
-      where: {
-        lockedAt: {
-          [Op.lt]: new Date(Date.now() - CONFIG.staleLockTimeoutMs),
-        },
-      },
-    });
+
+    const locks = await SchedulerLock.findAll();
+    let removed = 0;
+
+    for (const lock of locks) {
+      const isStale = lock.lockedAt < new Date(Date.now() - CONFIG.staleLockTimeoutMs);
+      const pid = extractPid(lock.processId);
+      const ownerAlive = isProcessAlive(pid);
+
+      if (isStale || !ownerAlive) {
+        await lock.destroy();
+        removed += 1;
+      }
+    }
 
     if (removed > 0) {
       log(`Очищено ${removed} старых блокировок`, 'info');
