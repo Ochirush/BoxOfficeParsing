@@ -4,12 +4,16 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "start": "node src/scheduler.js",
+    
     "scheduler": "node src/scheduler.js",
     "parser": "node src/index.js",
     "processor": "node src/processData.js",
     "migrate": "node src/db/migrate.js",
     "db:migrate": "node src/db/migrate.js",
+    "pm2:start": "pm2 start ecosystem.config.js && pm2 save",
+    "pm2:restart": "pm2 reload ecosystem.config.js",
+    "pm2:stop": "pm2 stop movie-data-scheduler",
+    "pm2:logs": "pm2 logs movie-data-scheduler --lines 200",
     "test": "echo \"Error: no test specified\" && exit 1"
     
   },
