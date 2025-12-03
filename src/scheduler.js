@@ -18,6 +18,7 @@ const CONFIG = {
 };
 
 let lockTableReady = false;
+let activeLock = null;
 
 if (!fs.existsSync(CONFIG.logDir)) {
   fs.mkdirSync(CONFIG.logDir, { recursive: true });
@@ -159,6 +160,7 @@ async function collectData() {
   log('Начало выполнения задачи сбора данных', 'info');
 
   const lock = await acquireLock();
+  activeLock = lock;
   if (!lock) {
     log('Не удалось получить блокировку. Задача уже выполняется.', 'warn');
     return;
@@ -193,6 +195,7 @@ async function collectData() {
     fs.writeFileSync(errorFile, JSON.stringify(errors, null, 2), 'utf8');
   } finally {
     await releaseLock(lock);
+    activeLock = null;
   }
 }
 
@@ -203,6 +206,8 @@ function setupSignalHandlers() {
     process.on(signal, async () => {
       log(`Получен сигнал ${signal}. Завершение работы...`, 'info');
       try {
+        await releaseLock(activeLock);
+        activeLock = null;
         await sequelize.close();
       } catch (error) {
         log(`Ошибка при закрытии соединения: ${error.message}`, 'error');

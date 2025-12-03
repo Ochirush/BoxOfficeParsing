@@ -51,7 +51,7 @@ async function fetchBoxOfficeMojoDetailed() {
         detailedMoviesData.push(detailedMovie);
         progress.completed++;
 
-        console.log(`Детализировано ${progress.completed}/${progress.total}: ${movie.title}`);
+        
 
       } catch (error) {
         console.error(`Ошибка при обработке фильма "${movie.title}":`, error.message);

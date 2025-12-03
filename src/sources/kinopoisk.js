@@ -54,8 +54,8 @@ async function fetchKinopoisk() {
           const movie = {
             title: title,
             rating: cleanScore ? `${cleanScore}%` : 'N/A',
-            domesticRevenue: revenueMatch ? standardizeRevenue(revenueString) : 'N/A', // Передаем строку, а не число
-            worldwideRevenue: revenueMatch ? standardizeRevenue(revenueString) : 'N/A', // Передаем строку, а не число
+            domesticRevenue: revenueMatch ? standardizeRevenue(revenueString) : 'N/A', 
+            worldwideRevenue: revenueMatch ? standardizeRevenue(revenueString) : 'N/A',
             releaseDate: releaseDate,
             source: 'Rotten Tomatoes'
           };
@@ -79,13 +79,13 @@ async function fetchKinopoisk() {
           if (title && title.length > 0) {
             const revenueMatch = text.match(/\$([\d,.]+)\s*(million|billion)/i);
             if (revenueMatch) {
-              const revenueString = revenueMatch[0]; // Получаем полную строку сбора
+              const revenueString = revenueMatch[0]; 
 
               const movie = {
                 title: title,
                 rating: 'N/A',
-                domesticRevenue: standardizeRevenue(revenueString), // Передаем строку
-                worldwideRevenue: standardizeRevenue(revenueString), // Передаем строку
+                domesticRevenue: standardizeRevenue(revenueString), 
+                worldwideRevenue: standardizeRevenue(revenueString), 
                 releaseDate: '',
                 source: 'Rotten Tomatoes'
               };

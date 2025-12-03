@@ -34,7 +34,7 @@ async function fetchIMDB() {
     const $ = cheerio.load(chartResponse.data);
     const moviesData = [];
 
-    // Ищем все контейнеры с фильмами
+    
     const movieContainers = $('div.sc-b4f120f6-0.bQhtuJ');
     
     console.log(`Найдено контейнеров с фильмами: ${movieContainers.length}`);
@@ -44,10 +44,10 @@ async function fetchIMDB() {
 
       const $container = $(container);
       
-      // Получаем ранг из ссылки или по порядку
+     
       const rank = moviesData.length + 1;
       
-      // Получаем название фильма и ссылку
+      
       const titleLink = $container.find('a.ipc-title-link-wrapper');
       const title = titleLink.find('h3.ipc-title__text').text().trim();
       const href = titleLink.attr('href');
@@ -57,7 +57,7 @@ async function fetchIMDB() {
       
       if (!title || title === 'N/A') return;
 
-      // Получаем данные о сборах
+      
       const boxOfficeData = getBoxOfficeData($, $container);
 
       const movie = {
@@ -71,12 +71,12 @@ async function fetchIMDB() {
       };
 
       moviesData.push(movie);
-      console.log(`Добавлен фильм: ${title} - Weekend: ${boxOfficeData.weekend || 'N/A'}, Total: ${boxOfficeData.total || 'N/A'}`);
+      
     });
 
     console.log(`Обработано фильмов: ${moviesData.length}`);
 
-    // Если фильмов меньше минимального, пробуем альтернативный парсинг
+    
     if (moviesData.length < imdbConfig.minMovies) {
       console.log('Основной парсинг дал мало результатов, пробуем альтернативный метод...');
       await alternativeIMDBParsing($, moviesData, imdbConfig.maxMovies);
@@ -116,21 +116,21 @@ async function fetchIMDB() {
   }
 }
 
-// Исправленная функция для получения данных о сборах
+
 function getBoxOfficeData($, containerElement) {
   const boxOfficeData = {};
   
-  // Ищем контейнер с данными о сборах по data-testid
+  
   const boxOfficeContainer = containerElement.find('[data-testid="title-metadata-box-office-data-container"]');
   
   if (boxOfficeContainer.length > 0) {
-    // Проходим по всем элементам списка
+    
     boxOfficeContainer.find('li.sc-382281d-1.gPDhWQ').each((i, li) => {
       const $li = $(li);
       const label = $li.find('span').first().text().trim();
       const value = $li.find('span.sc-382281d-2').text().trim();
       
-      console.log(`Найдены данные: ${label} = ${value}`);
+      
       
       if (label.includes('Weekend Gross')) {
         boxOfficeData.weekend = standardizeRevenue(value);
@@ -141,11 +141,11 @@ function getBoxOfficeData($, containerElement) {
   } else {
     console.log('Контейнер с данными о сборах не найден, пробуем другие методы...');
     
-    // Альтернативный поиск по тексту
+    
     containerElement.find('li, div, span').each((i, elem) => {
       const text = $(elem).text().trim();
       if (text.includes('Weekend Gross') || text.includes('Total Gross')) {
-        // Ищем значение сбора в следующем элементе
+        
         const value = $(elem).find('span').last().text().trim();
         if (value.includes('$')) {
           if (text.includes('Weekend Gross')) {
@@ -161,11 +161,11 @@ function getBoxOfficeData($, containerElement) {
   return boxOfficeData;
 }
 
-// Альтернативный метод парсинга по структуре из HTML
+
 async function alternativeIMDBParsing($, moviesData, maxMovies) {
   console.log('Используем альтернативный метод парсинга по всей странице...');
   
-  // Ищем все блоки с фильмами по более общим селекторам
+  
   const movieBlocks = $('div[class*="cli-children"], div[class*="sc-"]');
   const processedIds = new Set(moviesData.map(m => m.id));
   
@@ -174,13 +174,13 @@ async function alternativeIMDBParsing($, moviesData, maxMovies) {
     
     const $block = $(block);
     
-    // Проверяем, содержит ли блок название фильма
+    
     const titleElement = $block.find('h3.ipc-title__text, h4, [class*="title"]');
     const title = titleElement.text().trim();
     
     if (!title || title.length < 2) return;
     
-    // Ищем ссылку
+    
     const link = $block.find('a[href*="/title/tt"]').first();
     const href = link.attr('href');
     if (!href) return;
@@ -190,19 +190,19 @@ async function alternativeIMDBParsing($, moviesData, maxMovies) {
     
     const id = idMatch[1];
     
-    // Пропускаем дубликаты
+  
     if (processedIds.has(id)) return;
     processedIds.add(id);
     
-    // Ищем данные о сборах в этом блоке
+    
     let weekendGross = 'N/A';
     let totalGross = 'N/A';
     
-    // Ищем элементы с текстом "Weekend Gross" или "Total Gross"
+    
     $block.find('*').each((i, elem) => {
       const elemText = $(elem).text().trim();
       if (elemText.includes('Weekend Gross')) {
-        // Пытаемся найти значение сбора
+        
         const nextSpan = $(elem).find('span.sc-382281d-2').first();
         if (nextSpan.length) {
           weekendGross = standardizeRevenue(nextSpan.text().trim());
@@ -232,7 +232,7 @@ async function alternativeIMDBParsing($, moviesData, maxMovies) {
   console.log(`Альтернативным методом добавлено фильмов: ${moviesData.length - processedIds.size + processedIds.size}`);
 }
 
-// Остальные функции остаются без изменений
+
 async function fetchDetailedMovieData(moviesData, imdbConfig) {
   const progress = {
     total: Math.min(moviesData.length, imdbConfig.detailedMaxMovies || moviesData.length),
@@ -250,7 +250,7 @@ async function fetchDetailedMovieData(moviesData, imdbConfig) {
       Object.assign(movie, detailedInfo);
 
       progress.completed++;
-      console.log(`Детализировано ${progress.completed}/${progress.total}: ${movie.title}`);
+      
 
     } catch (error) {
       console.error(`Ошибка при детализации фильма "${movie.title}":`, error.message);

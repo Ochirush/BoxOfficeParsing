@@ -4,27 +4,58 @@ const { fetchTheNumbers } = require('./sources/theNumbers');
 const { fetchIMDB } = require('./sources/imdb');
 const { fetchKinopoisk } = require('./sources/kinopoisk');
 
+function summarizeMoviesResult(result) {
+  if (!result) {
+    return { totalMovies: 0, error: true, errorMessage: 'Результат недоступен' };
+  }
+
+  const { totalMovies = 0, error = false, errorMessage = null, source = 'Unknown' } = result;
+  return { totalMovies, error: !!error, errorMessage, source };
+}
+
+function summarizeDetailedResult(result) {
+  if (!result) {
+    return { totalMovies: 0, successful: 0, failed: 0, error: true, errorMessage: 'Результат недоступен' };
+  }
+
+  const {
+    totalMovies = 0,
+    successful = 0,
+    failed = 0,
+    error = false,
+    errorMessage = null,
+    source = 'Unknown'
+  } = result;
+
+  return { totalMovies, successful, failed, error: !!error, errorMessage, source };
+}
+
 async function main() {
   try {
     const results = {};
-    
+
     console.log('Сбор данных Box Office Mojo');
-    results.boxOfficeMojo = await fetchBoxOfficeMojo();
-    
+    const boxOfficeMojoResult = await fetchBoxOfficeMojo();
+    results.boxOfficeMojo = summarizeMoviesResult(boxOfficeMojoResult);
+
     console.log('Сбор данных The Numbers');
-    results.theNumbers = await fetchTheNumbers();
-    
+    const theNumbersResult = await fetchTheNumbers();
+    results.theNumbers = summarizeMoviesResult(theNumbersResult);
+
     console.log('Сбор данных IMDb Box Office');
-    results.imdb = await fetchIMDB();
-    
+    const imdbResult = await fetchIMDB();
+    results.imdb = summarizeMoviesResult(imdbResult);
+
     console.log('Сбор данных Rotten Tomatoes');
-    results.rottenTomatoes = await fetchKinopoisk();
-    
+    const kinopoiskResult = await fetchKinopoisk();
+    results.rottenTomatoes = summarizeMoviesResult(kinopoiskResult);
+
     if (results.boxOfficeMojo && !results.boxOfficeMojo.error && results.boxOfficeMojo.totalMovies > 0) {
       console.log('Детализированный сбор данных Box Office Mojo');
-      results.boxOfficeMojoDetailed = await fetchBoxOfficeMojoDetailed();
+      const detailedResult = await fetchBoxOfficeMojoDetailed();
+      results.boxOfficeMojoDetailed = summarizeDetailedResult(detailedResult);
     }
-    
+
     generateFinalReport(results);
     
   } catch (error) {
@@ -34,7 +65,7 @@ async function main() {
 
 function generateFinalReport(results) {
 
-  const totalMovies = 
+  const totalMovies =
     (results.boxOfficeMojo && !results.boxOfficeMojo.error ? results.boxOfficeMojo.totalMovies : 0) +
     (results.theNumbers && !results.theNumbers.error ? results.theNumbers.totalMovies : 0) +
     (results.imdb && !results.imdb.error ? results.imdb.totalMovies : 0) +
@@ -57,7 +88,7 @@ function generateFinalReport(results) {
     console.log(`Rotten Tomatoes: ${results.rottenTomatoes.totalMovies} фильмов`);
   }
   if (results.boxOfficeMojoDetailed && !results.boxOfficeMojoDetailed.error) {
-    console.log(`Детализировано Box Office Mojo: ${results.boxOfficeMojoDetailed.detailedMovies} фильмов`);
+    
   }
   
   console.log('Данные сохранены в папке data/');

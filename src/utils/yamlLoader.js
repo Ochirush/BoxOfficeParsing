@@ -6,7 +6,7 @@ class YAMLLoader {
   static loadConfig(filePath) {
     try {
       const absolutePath = path.resolve(filePath);
-      console.log(`Загрузка конфигурации из: ${absolutePath}`);
+      
       
       if (!fs.existsSync(absolutePath)) {
         throw new Error(`Файл не существует: ${absolutePath}`);
@@ -14,7 +14,7 @@ class YAMLLoader {
       
       const fileContents = fs.readFileSync(absolutePath, 'utf8');
       const config = yaml.load(fileContents);
-      console.log(`Конфигурация YAML загружена: ${filePath}`);
+      
       return config;
     } catch (error) {
       console.error('Ошибка загрузки YAML:', error.message);

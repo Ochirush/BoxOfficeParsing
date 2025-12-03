@@ -8,11 +8,8 @@
     "scheduler": "node src/scheduler.js",
     "parser": "node src/index.js",
     "processor": "node src/processData.js",
-<<<<<<< HEAD
     "migrate": "node src/db/migrate.js",
-=======
     "db:migrate": "node src/db/migrate.js",
->>>>>>> ec6775c (Исправленная вещь)
     "test": "echo \"Error: no test specified\" && exit 1"
     
   },

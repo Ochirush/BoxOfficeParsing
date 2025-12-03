@@ -3,8 +3,7 @@ const cheerio = require('cheerio');
 const { saveData } = require('../utils/saveData');
 const { delay } = require('../utils/delay');
 const YAMLLoader = require('../utils/yamlLoader');
-const { standardizeRevenue } = require('../utils/standardizeRevenue');  // Импортируем функцию для стандартизации сборов
-
+const { standardizeRevenue } = require('../utils/standardizeRevenue');  
 const BASE_URL = 'https://www.the-numbers.com';
 
 async function fetchTheNumbers() {
@@ -76,9 +75,8 @@ async function fetchTheNumbers() {
         const movie = {
           rank: rank++,
           title: title,
-          weekendGross: standardizeRevenue(weekendGross),  // Применяем стандартизацию для сбора
-          totalGross: standardizeRevenue(totalGross || weekendGross),  // Применяем стандартизацию для мирового сбора
-          theaters: theaters || 'N/A',
+          weekendGross: standardizeRevenue(weekendGross),  
+          totalGross: standardizeRevenue(totalGross || weekendGross),  
           averagePerTheater: averagePerTheater || 'N/A',
           url: movieUrl ? (movieUrl.startsWith('http') ? movieUrl : BASE_URL + movieUrl) : 'N/A',
           scrapedAt: new Date().toISOString()
@@ -174,8 +172,8 @@ async function enhancedAlternativeParsing($, moviesData, maxMovies) {
     const movie = {
       rank: rank++,
       title: title,
-      weekendGross: standardizeRevenue(weekendGross || 'N/A'),  // Применяем стандартизацию для сбора
-      totalGross: standardizeRevenue(totalGross || 'N/A'),  // Применяем стандартизацию для мирового сбора
+      weekendGross: standardizeRevenue(weekendGross || 'N/A'), 
+      totalGross: standardizeRevenue(totalGross || 'N/A'),  
       theaters: theaters || 'N/A',
       averagePerTheater: averagePerTheater || 'N/A',
       url: movieUrl ? (movieUrl.startsWith('http') ? movieUrl : BASE_URL + movieUrl) : 'N/A',
