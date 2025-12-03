@@ -1,6 +1,6 @@
 const { Sequelize } = require('sequelize');
 
-const DB_NAME = process.env.DB_NAME || process.env.POSTGRES_DB || 'testdb';
+const DB_NAME = process.env.DB_NAME || process.env.POSTGRES_DB || 'Box office';
 const DB_USER = process.env.DB_USER || process.env.POSTGRES_USER || 'admin';
 const DB_PASSWORD = process.env.DB_PASSWORD || process.env.POSTGRES_PASSWORD || '12345';
 const DB_HOST = process.env.DB_HOST || process.env.POSTGRES_HOST || 'localhost';

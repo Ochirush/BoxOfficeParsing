@@ -23,5 +23,10 @@
     "timestamp": "2025-12-03T16:20:47.775Z",
     "error": "Скрипт завершился с кодом 3221225786: ",
     "stack": "Error: Скрипт завершился с кодом 3221225786: \n    at ChildProcess.<anonymous> (C:\\EB\\BoxOfficeParsing\\src\\scheduler.js:175:16)\n    at ChildProcess.emit (node:events:519:28)\n    at maybeClose (node:internal/child_process:1101:16)\n    at ChildProcess._handle.onexit (node:internal/child_process:304:5)"
+  },
+  {
+    "timestamp": "2025-12-03T16:52:31.323Z",
+    "error": "Скрипт завершился с кодом 3221225786: ",
+    "stack": "Error: Скрипт завершился с кодом 3221225786: \n    at ChildProcess.<anonymous> (C:\\EB\\BoxOfficeParsing\\src\\scheduler.js:175:16)\n    at ChildProcess.emit (node:events:519:28)\n    at maybeClose (node:internal/child_process:1101:16)\n    at ChildProcess._handle.onexit (node:internal/child_process:304:5)"
   }
 ]
