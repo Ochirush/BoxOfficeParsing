@@ -13,8 +13,8 @@ sources:
       DNT: "1"
       'Upgrade-Insecure-Requests': "1"
     delayBetweenRequests: 3000
-    maxMovies: 15
-    detailedMaxMovies: 15
+    maxMovies: 30
+    detailedMaxMovies: 30
   
   theNumbers:
     baseUrl: "https://www.the-numbers.com"
@@ -30,7 +30,7 @@ sources:
       DNT: "1"
       'Upgrade-Insecure-Requests': "1"
     delayBetweenRequests: 2000
-    maxMovies: 15
+    maxMovies: 40
 
   imdb:
     chartUrl: "https://www.imdb.com/chart/boxoffice/"
@@ -47,7 +47,7 @@ sources:
     detailedMaxMovies: 10
     delayBetweenRequests: 2000
 
-  rottenTomatoes:  # ИСПРАВЛЕНО: правильный отступ (2 пробела)
+  rottenTomatoes:  
     baseUrl: "https://editorial.rottentomatoes.com"
     chartUrl: "https://editorial.rottentomatoes.com/article/highest-grossing-movies-all-time/"
     headers:
