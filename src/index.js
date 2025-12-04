@@ -3,6 +3,7 @@ const { fetchBoxOfficeMojoDetailed } = require('./sources/boxOfficeMojoDetailed'
 const { fetchTheNumbers } = require('./sources/theNumbers');
 const { fetchIMDB } = require('./sources/imdb');
 const { fetchKinopoisk } = require('./sources/kinopoisk');
+const { standardizeRevenue } = require('./utils/standardizeRevenue');
 
 function summarizeMoviesResult(result) {
   if (!result) {
