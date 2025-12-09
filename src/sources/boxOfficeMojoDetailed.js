@@ -1,11 +1,11 @@
-const request = require('request');
 const cheerio = require('cheerio');
 const { saveData } = require('../utils/saveData');
 const { delay } = require('../utils/delay');
 const YAMLLoader = require('../utils/yamlLoader');
 const fs = require('fs').promises;
 const path = require('path');
-const { standardizeRevenue } = require('../utils/standardizeRevenue');  
+const { standardizeRevenue } = require('../utils/standardizeRevenue');
+const { fetchHtmlWithLimit } = require('../utils/httpStream');
 
 const BASE_URL = 'https://www.boxofficemojo.com';
 
@@ -101,24 +101,18 @@ async function fetchMovieDetails(movie, headers) {
     throw new Error('URL фильма недоступен');
   }
 
-  const response = await new Promise((resolve, reject) => {
-    request({
-      url: movie.url,
+  const config = YAMLLoader.loadConfig('./src/config/requests.yaml');
+  const html = await fetchHtmlWithLimit(
+    movie.url,
+    {
       headers: headers,
       timeout: 15000,
       gzip: true
-    }, (error, response, body) => {
-      if (error) {
-        reject(error);
-      } else if (response.statusCode !== 200) {
-        reject(new Error(`HTTP ${response.statusCode}: ${response.statusMessage}`));
-      } else {
-        resolve({ data: body, headers: response.headers });
-      }
-    });
-  });
+    },
+    config.settings?.maxResponseSize
+  );
 
-  const $ = cheerio.load(response.data);
+  const $ = cheerio.load(html);
 
   const detailedInfo = {
     ...movie,
@@ -156,8 +150,8 @@ function extractBoxOfficeData($, detailedInfo) {
   if (performanceSummary.length > 0) {
     const moneyValues = performanceSummary.find('.money');
     if (moneyValues.length >= 2) {
-      detailedInfo.domesticGross = standardizeRevenue(moneyValues.eq(0).text().trim());  // Применяем стандартизацию
-      detailedInfo.internationalGross = standardizeRevenue(moneyValues.eq(1).text().trim());  // Применяем стандартизацию
+      detailedInfo.domesticGross = standardizeRevenue(moneyValues.eq(0).text().trim());  
+      detailedInfo.internationalGross = standardizeRevenue(moneyValues.eq(1).text().trim());  
       return;
     }
   }
@@ -166,7 +160,7 @@ function extractBoxOfficeData($, detailedInfo) {
   if (domesticLabel.length > 0) {
     const domesticMoney = domesticLabel.find('.money').first();
     if (domesticMoney.length > 0) {
-      detailedInfo.domesticGross = standardizeRevenue(domesticMoney.text().trim());  // Применяем стандартизацию
+      detailedInfo.domesticGross = standardizeRevenue(domesticMoney.text().trim());  
     }
   }
 
@@ -174,7 +168,7 @@ function extractBoxOfficeData($, detailedInfo) {
   if (internationalLabel.length > 0) {
     const internationalMoney = internationalLabel.find('.money').first();
     if (internationalMoney.length > 0) {
-      detailedInfo.internationalGross = standardizeRevenue(internationalMoney.text().trim());  // Применяем стандартизацию
+      detailedInfo.internationalGross = standardizeRevenue(internationalMoney.text().trim());  
     }
   }
 
@@ -192,14 +186,14 @@ function extractBoxOfficeData($, detailedInfo) {
         if (firstCell.includes('Domestic') || firstCell.includes('North America')) {
           const moneyCell = cells.find('.money').first();
           if (moneyCell.length > 0 && !detailedInfo.domesticGross) {
-            detailedInfo.domesticGross = standardizeRevenue(moneyCell.text().trim());  // Применяем стандартизацию
+            detailedInfo.domesticGross = standardizeRevenue(moneyCell.text().trim());  
           }
         }
 
         if (firstCell.includes('International') || firstCell.includes('Foreign')) {
           const moneyCell = cells.find('.money').first();
           if (moneyCell.length > 0 && !detailedInfo.internationalGross) {
-            detailedInfo.internationalGross = standardizeRevenue(moneyCell.text().trim());  // Применяем стандартизацию
+            detailedInfo.internationalGross = standardizeRevenue(moneyCell.text().trim());  
           }
         }
       }
@@ -212,7 +206,7 @@ function extractBudget($, detailedInfo) {
   if (budgetLabel.length > 0) {
     const budgetMoney = budgetLabel.find('.money').first();
     if (budgetMoney.length > 0) {
-      detailedInfo.budget = standardizeRevenue(budgetMoney.text().trim());  // Применяем стандартизацию
+      detailedInfo.budget = standardizeRevenue(budgetMoney.text().trim()); 
       return;
     }
   }
@@ -226,7 +220,7 @@ function extractBudget($, detailedInfo) {
       if (nextCell.length > 0) {
         const money = nextCell.find('.money').first();
         if (money.length > 0) {
-          detailedInfo.budget = standardizeRevenue(money.text().trim());  // Применяем стандартизацию
+          detailedInfo.budget = standardizeRevenue(money.text().trim());  
           return false;
         }
       }

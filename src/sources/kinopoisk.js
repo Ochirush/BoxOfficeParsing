@@ -1,103 +1,173 @@
-const axios = require('axios');
 const cheerio = require('cheerio');
-const { delay } = require('../utils/delay');
+const { saveData } = require('../utils/saveData');
 const YAMLLoader = require('../utils/yamlLoader');
 const { standardizeRevenue } = require('../utils/standardizeRevenue');
+const { fetchHtmlWithLimit } = require('../utils/httpStream');
 
 async function fetchKinopoisk() {
+  const url = 'https://editorial.rottentomatoes.com/article/highest-grossing-movies-all-time/';
+
   try {
     console.log('Загрузка данных с Rotten Tomatoes...');
 
-    const url = 'https://editorial.rottentomatoes.com/article/highest-grossing-movies-all-time/';
+    const config = YAMLLoader.loadConfig('./src/config/requests.yaml');
+    const maxMovies =
+      Number(config?.sources?.kinopoisk?.maxMovies) ||
+      Number(config?.sources?.rottenTomatoes?.maxMovies) ||
+      200;
 
-    const response = await axios.get(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.5',
-        'Accept-Encoding': 'gzip, deflate, br',
-        'Connection': 'keep-alive',
+    const headers = {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0 Safari/537.36',
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      'Accept-Language': 'en-US,en;q=0.9',
+      'Accept-Encoding': 'gzip, deflate',
+      'Connection': 'keep-alive',
+    };
+
+    const html = await fetchHtmlWithLimit(
+      url,
+      {
+        headers,
+        timeout: config.settings?.requestTimeout || 30000,
+        gzip: true
       },
-      timeout: 30000
-    });
+      config.settings?.maxResponseSize
+    );
 
-    const $ = cheerio.load(response.data);
+    const $ = cheerio.load(html);
     const movies = [];
+    const seen = new Set();
+    let rank = 1;
 
-    $('.apple-news-media-block').each((index, element) => {
-      try {
-        const $block = $(element);
+    const scope = $('article').length ? $('article') : $.root();
 
-        const title = $block.find('.title strong').text().trim();
-        const score = $block.find('.score strong').first().text().trim();
-        const domesticText = $block.find('.details strong').first().text().trim();
-        const releaseDateText = $block.find('.details strong').eq(1).text().trim();
+    const extractRevenueString = (text) => {
+      if (!text) return null;
+      const m1 = text.match(/\$[\d,.]+\s*(million|billion)/i);
+      if (m1) return m1[0];
+      const m2 = text.match(/\$[\d,.]+/);
+      return m2 ? m2[0] : null;
+    };
 
-        if (title && domesticText) {
-          const revenueMatch = domesticText.match(/\$([\d,.]+)\s*(million|billion)/i);
-          let revenueValue = 'N/A';
-          let revenueString = 'N/A';
+    const looksLikeHeader = (t) => {
+      const s = t.toLowerCase();
+      return (
+        s === 'rank' ||
+        s === 'movie' ||
+        s === 'title' ||
+        s.includes('domestic') ||
+        s.includes('worldwide') ||
+        s.includes('gross') ||
+        s.includes('box office')
+      );
+    };
 
-          if (revenueMatch) {
-            const amount = parseFloat(revenueMatch[1].replace(/,/g, ''));
-            const multiplier = revenueMatch[2].toLowerCase() === 'billion' ? 1000000000 : 1000000;
-            const revenue = amount * multiplier;
-            revenueString = revenueMatch[0]; // Например: "$2.9 billion"
-            revenueValue = revenue.toString(); // Преобразуем число в строку для standardizeRevenue
-          }
+    const titleFromRow = ($row) => {
+      const cells = $row.find('th, td');
+      const texts = [];
+      cells.each((i, c) => {
+        const t = $(c).text().replace(/\s+/g, ' ').trim();
+        if (t) texts.push(t);
+      });
+      const candidate = texts.find(t => !t.includes('$') && /[A-Za-zА-Яа-я]/.test(t) && !looksLikeHeader(t));
+      return candidate || '';
+    };
 
-          const releaseDateMatch = releaseDateText.match(/Release date:\s*(.+)/i);
-          const releaseDate = releaseDateMatch ? releaseDateMatch[1].trim() : '';
+    const extractTitle = ($el) => {
+      let title =
+        $el.find('.title strong').first().text().trim() ||
+        $el.find('a[href*="/title/"]').first().text().trim() ||
+        $el.find('a[href*="/movie/"]').first().text().trim() ||
+        $el.find('h1, h2, h3, h4').first().text().trim() ||
+        $el.find('strong, b, em').first().text().trim() ||
+        $el.find('a').first().text().trim();
 
-          const cleanScore = score.replace(/%/g, '');
-
-          const movie = {
-            title: title,
-            rating: cleanScore ? `${cleanScore}%` : 'N/A',
-            domesticRevenue: revenueMatch ? standardizeRevenue(revenueString) : 'N/A', 
-            worldwideRevenue: revenueMatch ? standardizeRevenue(revenueString) : 'N/A',
-            releaseDate: releaseDate,
-            source: 'Rotten Tomatoes'
-          };
-
-          movies.push(movie);
-        }
-      } catch (error) {
-        console.error('Ошибка парсинга блока фильма:', error.message);
+      if (!title && $el.is('tr')) {
+        title = titleFromRow($el);
       }
-    });
 
-    if (movies.length === 0) {
-      console.log('Пробуем альтернативные селекторы...');
+      if (!title || title.includes('$') || looksLikeHeader(title)) {
+        const text = $el.text().replace(/\s+/g, ' ').trim();
+        if (text) {
+          const beforeDollar = text.split('$')[0].trim();
+          const parts = beforeDollar.split('•').map(s => s.trim()).filter(Boolean);
+          title = (parts[0] || beforeDollar).trim();
+        }
+      }
 
-      $('div').each((index, element) => {
-        const $div = $(element);
-        const text = $div.text();
+      return title;
+    };
 
-        if (text.includes('$') && (text.includes('million') || text.includes('billion'))) {
-          const title = $div.find('h3, h4, strong').first().text().trim();
-          if (title && title.length > 0) {
-            const revenueMatch = text.match(/\$([\d,.]+)\s*(million|billion)/i);
-            if (revenueMatch) {
-              const revenueString = revenueMatch[0]; 
+    const monthPattern = '(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Sept|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)';
+    const fullDateRe = new RegExp(`${monthPattern}\\s+\\d{1,2},\\s+\\d{4}`, 'i');
 
-              const movie = {
-                title: title,
-                rating: 'N/A',
-                domesticRevenue: standardizeRevenue(revenueString), 
-                worldwideRevenue: standardizeRevenue(revenueString), 
-                releaseDate: '',
-                source: 'Rotten Tomatoes'
-              };
+    const cleanReleaseDate = (text) => {
+      if (!text) return '';
+      const m = String(text).match(fullDateRe);
+      return m ? m[0].trim() : '';
+    };
 
-              if (!movies.some(m => m.title === title)) {
-                movies.push(movie);
-              }
-            }
-          }
+    const extractReleaseDateFromRow = ($row) => {
+      const cells = $row.find('th, td');
+      let found = '';
+      cells.each((i, c) => {
+        const t = $(c).text().replace(/\s+/g, ' ').trim();
+        if (!t) return;
+        const d = cleanReleaseDate(t);
+        if (d) {
+          found = d;
+          return false;
         }
       });
-    }
+      return found;
+    };
+
+    const extractReleaseDate = ($el, text) => {
+      let d = cleanReleaseDate(text);
+      if (d) return d;
+
+      if ($el.is('tr')) {
+        d = extractReleaseDateFromRow($el);
+        if (d) return d;
+      }
+
+      const localText =
+        $el.find('.details strong').text().replace(/\s+/g, ' ').trim() ||
+        $el.find('.details').text().replace(/\s+/g, ' ').trim();
+
+      d = cleanReleaseDate(localText);
+      return d || '';
+    };
+
+    const candidates = scope.find('tr, .apple-news-media-block, li, p');
+
+    candidates.each((_, el) => {
+      if (movies.length >= maxMovies) return false;
+
+      const $el = $(el);
+      const text = $el.text().replace(/\s+/g, ' ').trim();
+      if (!text || !text.includes('$')) return;
+
+      const revenueString = extractRevenueString(text);
+      if (!revenueString) return;
+
+      const title = extractTitle($el);
+      if (!title || title.length < 2 || seen.has(title)) return;
+
+      const releaseDate = extractReleaseDate($el, text);
+
+      seen.add(title);
+
+      movies.push({
+        rank: rank++,
+        title,
+        rating: 'N/A',
+        domesticRevenue: standardizeRevenue(revenueString),
+        worldwideRevenue: standardizeRevenue(revenueString),
+        releaseDate,
+        source: 'Rotten Tomatoes'
+      });
+    });
 
     if (movies.length === 0) {
       throw new Error('Не удалось найти данные о фильмах на странице');
@@ -105,13 +175,16 @@ async function fetchKinopoisk() {
 
     const result = {
       source: 'Rotten Tomatoes',
+      sourceUrl: url,
+      chartUrl: url,
+      fetchedAt: new Date().toISOString(),
       totalMovies: movies.length,
-      movies: movies,
-      lastUpdated: new Date().toISOString(),
-      error: null
+      movies,
+      error: false,
+      errorMessage: null
     };
 
-    YAMLLoader.saveData(result, './data/rotten_tomatoes.yaml');
+    await saveData(result, 'rotten_tomatoes_data');
 
     console.log(`Rotten Tomatoes: собрано ${movies.length} фильмов`);
     return result;
@@ -119,15 +192,16 @@ async function fetchKinopoisk() {
   } catch (error) {
     console.error('Ошибка при парсинге Rotten Tomatoes:', error.message);
 
-    const errorResult = {
+    return {
       source: 'Rotten Tomatoes',
+      sourceUrl: url,
+      chartUrl: url,
+      fetchedAt: new Date().toISOString(),
       totalMovies: 0,
       movies: [],
-      lastUpdated: new Date().toISOString(),
-      error: error.message
+      error: true,
+      errorMessage: error.message
     };
-
-    return errorResult;
   }
 }
 

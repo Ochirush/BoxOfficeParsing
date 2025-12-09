@@ -65,11 +65,12 @@ sources:
       'Sec-Fetch-Mode': "navigate"
       'Sec-Fetch-Site': "same-origin"
     delayBetweenRequests: 3000
-    maxMovies: 20
+    maxMovies: 50
     timeout: 15000
 
-settings:
-  dataDir: "./data"
-  maxRetries: 3
-  requestTimeout: 30000
-  enableLogging: true
+  settings:
+    dataDir: "./data"
+    maxRetries: 3
+    requestTimeout: 30000
+    maxResponseSize: 5242880
+    enableLogging: true

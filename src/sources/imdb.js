@@ -1,9 +1,9 @@
-const request = require('request');
 const cheerio = require('cheerio');
 const { saveData } = require('../utils/saveData');
 const { delay } = require('../utils/delay');
 const YAMLLoader = require('../utils/yamlLoader');
 const { standardizeRevenue } = require('../utils/standardizeRevenue');
+const { fetchHtmlWithLimit } = require('../utils/httpStream');
 
 const BASE_URL = 'https://www.imdb.com';
 
@@ -14,24 +14,17 @@ async function fetchIMDB() {
     const config = YAMLLoader.loadConfig('./src/config/requests.yaml');
     const imdbConfig = config.sources.imdb;
 
-    const chartResponse = await new Promise((resolve, reject) => {
-      request({
-        url: imdbConfig.chartUrl,
+    const chartHtml = await fetchHtmlWithLimit(
+      imdbConfig.chartUrl,
+      {
         headers: imdbConfig.headers,
         timeout: 15000,
         gzip: true
-      }, (error, response, body) => {
-        if (error) {
-          reject(error);
-        } else if (response.statusCode !== 200) {
-          reject(new Error(`HTTP ${response.statusCode}: ${response.statusMessage}`));
-        } else {
-          resolve({ data: body, headers: response.headers });
-        }
-      });
-    });
+      },
+      config.settings?.maxResponseSize
+    );
 
-    const $ = cheerio.load(chartResponse.data);
+    const $ = cheerio.load(chartHtml);
     const moviesData = [];
 
     
@@ -269,24 +262,18 @@ async function fetchMovieDetails(movie, headers) {
     throw new Error('URL фильма недоступен');
   }
 
-  const response = await new Promise((resolve, reject) => {
-    request({
-      url: movie.url,
+  const config = YAMLLoader.loadConfig('./src/config/requests.yaml');
+  const html = await fetchHtmlWithLimit(
+    movie.url,
+    {
       headers: headers,
       timeout: 15000,
       gzip: true
-    }, (error, response, body) => {
-      if (error) {
-        reject(error);
-      } else if (response.statusCode !== 200) {
-        reject(new Error(`HTTP ${response.statusCode}: ${response.statusMessage}`));
-      } else {
-        resolve({ data: body, headers: response.headers });
-      }
-    });
-  });
+    },
+    config.settings?.maxResponseSize
+  );
 
-  const $ = cheerio.load(response.data);
+  const $ = cheerio.load(html);
 
   const detailedInfo = {
     scrapedAt: new Date().toISOString()

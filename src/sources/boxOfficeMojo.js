@@ -1,9 +1,9 @@
-const request = require('request');
 const cheerio = require('cheerio');
 const { saveData } = require('../utils/saveData');
 const { delay } = require('../utils/delay');
 const YAMLLoader = require('../utils/yamlLoader');
-const { standardizeRevenue } = require('../utils/standardizeRevenue');  // Импортируем функцию для стандартизации сборов
+const { standardizeRevenue } = require('../utils/standardizeRevenue');  
+const { fetchHtmlWithLimit } = require('../utils/httpStream');
 
 const BASE_URL = 'https://www.boxofficemojo.com';
 
@@ -14,24 +14,17 @@ async function fetchBoxOfficeMojo() {
     const config = YAMLLoader.loadConfig('./src/config/requests.yaml');
     const mojoConfig = config.sources.boxOfficeMojo;
 
-    const chartResponse = await new Promise((resolve, reject) => {
-      request({
-        url: mojoConfig.chartUrl,
+    const chartHtml = await fetchHtmlWithLimit(
+      mojoConfig.chartUrl,
+      {
         headers: mojoConfig.headers,
         timeout: 15000,
         gzip: true
-      }, (error, response, body) => {
-        if (error) {
-          reject(error);
-        } else if (response.statusCode !== 200) {
-          reject(new Error(`HTTP ${response.statusCode}: ${response.statusMessage}`));
-        } else {
-          resolve({ data: body, headers: response.headers });
-        }
-      });
-    });
+      },
+      config.settings?.maxResponseSize
+    );
 
-    const $ = cheerio.load(chartResponse.data);
+    const $ = cheerio.load(chartHtml);
     const moviesData = [];
     let rank = 1;
 
@@ -63,7 +56,7 @@ async function fetchBoxOfficeMojo() {
         }
       });
 
-      // Применяем стандартизацию сборов
+      
       revenue = standardizeRevenue(revenue);
 
       const yearLink = $row.find('a[href*="/year/"]').first();
@@ -139,7 +132,7 @@ async function alternativeParsing($, moviesData, maxMovies) {
       const revenueCell = $row.find('td:contains("$")').first();
       const revenue = revenueCell.length > 0 ? revenueCell.text().trim() : 'N/A';
 
-      // Применяем стандартизацию сборов
+      
       const standardizedRevenue = standardizeRevenue(revenue);
 
       const yearLink = $row.find('a[href*="/year/"]').first();

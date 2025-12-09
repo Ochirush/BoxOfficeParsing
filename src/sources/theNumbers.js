@@ -1,9 +1,9 @@
-const request = require('request');
 const cheerio = require('cheerio');
 const { saveData } = require('../utils/saveData');
 const { delay } = require('../utils/delay');
 const YAMLLoader = require('../utils/yamlLoader');
-const { standardizeRevenue } = require('../utils/standardizeRevenue');  
+const { standardizeRevenue } = require('../utils/standardizeRevenue');
+const { fetchHtmlWithLimit } = require('../utils/httpStream');
 const BASE_URL = 'https://www.the-numbers.com';
 
 async function fetchTheNumbers() {
@@ -13,24 +13,17 @@ async function fetchTheNumbers() {
     const config = YAMLLoader.loadConfig('./src/config/requests.yaml');
     const numbersConfig = config.sources.theNumbers;
 
-    const chartResponse = await new Promise((resolve, reject) => {
-      request({
-        url: numbersConfig.chartUrl,
+    const chartHtml = await fetchHtmlWithLimit(
+      numbersConfig.chartUrl,
+      {
         headers: numbersConfig.headers,
         timeout: 15000,
         gzip: true
-      }, (error, response, body) => {
-        if (error) {
-          reject(error);
-        } else if (response.statusCode !== 200) {
-          reject(new Error(`HTTP ${response.statusCode}: ${response.statusMessage}`));
-        } else {
-          resolve({ data: body, headers: response.headers });
-        }
-      });
-    });
+      },
+      config.settings?.maxResponseSize
+    );
 
-    const $ = cheerio.load(chartResponse.data);
+    const $ = cheerio.load(chartHtml);
     const moviesData = [];
 
     const table = $('#box_office_weekend_table');

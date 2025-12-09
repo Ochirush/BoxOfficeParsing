@@ -12,7 +12,10 @@ const FIELD_MAPPINGS = {
   total_gross: 'totalGross',
   domestic_gross: 'domesticGross',
   international_gross: 'internationalGross',
+  release_date: 'releaseDate'
 };
+
+
 
 const INSERT_BATCH_SIZE = 500;
 
