@@ -1,6 +1,7 @@
 const currency = (value) => '$' + Number(value || 0).toLocaleString('en-US');
 
 const alertBox = document.getElementById('alertBox');
+//переменные для графикокв 
 let sourceChart = null;
 let trendChart = null;
 let boxPlotChart = null;
@@ -41,12 +42,12 @@ const boxPlotPlugin = {
       ctx.strokeStyle = '#e9edf2';
       ctx.lineWidth = 2;
 
-      
+      //вертикаль усов
       ctx.beginPath();
       ctx.moveTo(centerX, yMin);
       ctx.lineTo(centerX, yMax);
       ctx.stroke();
-
+//шляпки усов на мин и макс
       ctx.beginPath();
       ctx.moveTo(centerX - whiskerHalfWidth, yMin);
       ctx.lineTo(centerX + whiskerHalfWidth, yMin);
@@ -54,13 +55,13 @@ const boxPlotPlugin = {
       ctx.lineTo(centerX + whiskerHalfWidth, yMax);
       ctx.stroke();
 
- 
+ //медиана
       ctx.beginPath();
       ctx.moveTo(centerX - whiskerHalfWidth, yMedian);
       ctx.lineTo(centerX + whiskerHalfWidth, yMedian);
       ctx.stroke();
 
-
+//контуры коробки
       ctx.beginPath();
       ctx.rect(
         centerX - whiskerHalfWidth,
@@ -77,7 +78,7 @@ const boxPlotPlugin = {
 
 Chart.register(boxPlotPlugin);
 
-async function loadMetrics() {
+async function loadMetrics() {//подругзка метрик с бдшки
   try {
     setAlert('Загружаем данные из базы…', 'info');
     const response = await fetch('/api/metrics');
